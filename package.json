@@ -1,0 +1,25 @@
+{
+  "name": "boutiqueBackend",
+  "version": "1.0.0",
+  "description": "A boutique store based in Helensburgh",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.15.3",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://mortonprod@github.com/mortonprod/BoutiqueBackend.git"
+  },
+  "author": "Alexander Morton",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mortonprod/BoutiqueBackend/issues"
+  },
+  "homepage": "https://github.com/mortonprod/BoutiqueBackend"
+}
