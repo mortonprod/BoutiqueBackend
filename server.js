@@ -76,6 +76,33 @@ app.get('/products',function(req,res){
     }
 });
 
+
+app.get('/products/:category',function(req,res){
+    var category = req.params.category;
+    let data = []
+    console.log("Query category: " + category);
+    if(productsCollection !== null){
+        productsCollection.find({ productCategories: category }).toArray(function(err,items){
+            for (let i = 0 ; i < items.length; i++){
+                console.log("Product: " + i + "  " + JSON.stringify(items[i]));
+                data.push(
+                    {
+                        title:items[i]["productName"],
+                        description:null,
+                        info:null,
+                        pic:null,
+                        price:null
+                    }
+                );
+            }
+            res.send(data);
+        });
+    }else{
+        console.log("Failed to get products");
+    }
+});
+
+
 app.post('/product',upload.single('productFile'), function(req,res,next){
     console.log('\n uploaded file %s',  req.file);
     console.log('\n uploaded name %s',  JSON.stringify(req.body));
