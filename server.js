@@ -2,9 +2,12 @@
 const path = require('path');
 const bodyParser = require('body-parser');
 const multer = require('multer');
+const fs = require('fs');
 const MongoClient = require('mongodb').MongoClient;
 
+///Must be full path to save to the right location. 
 var upload = multer({ dest: path.join(__dirname, './productsImages') }); 
+//var upload = multer({ dest: 'productsImages/' }); 
 
 var app = express();
 app.use(bodyParser.json());
@@ -103,9 +106,9 @@ app.get('/products/:category',function(req,res){
 });
 
 
-app.post('/product',upload.single('productFile'), function(req,res,next){
-    console.log('\n uploaded file %s',  req.file);
+app.post('/product',upload.single('file'), function(req,res,next){
     console.log('\n uploaded name %s',  JSON.stringify(req.body));
+    console.log('\n uploaded file %s',  req.file.originalname);
     if(productsCollection != null){
         productsCollection.insert(req.body, {w:1}, function(err, result) {
         console.log("Added. Result: " +  JSON.stringify(result));
@@ -113,6 +116,8 @@ app.post('/product',upload.single('productFile'), function(req,res,next){
     }else{
         console.log("Failed to add product info.");
     }
+    //Must rename the file to match what was passed in
+    fs.rename(path.join(__dirname, './productsImages', req.file.filename) , path.join(__dirname, './productsImages', req.file.originalname))
     res.redirect('/account');
 });
 
