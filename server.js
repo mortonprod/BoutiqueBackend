@@ -137,7 +137,7 @@ app.post('/category', function(req,res,next){
     console.log('\n uploaded name %s',  JSON.stringify(req.body));
     if(categoriesCollection != null){
         categoriesCollection.insert(req.body, {w:1}, function(err, result) {
-        console.log("Category added. Result: " +  JSON.stringify(result));
+            console.log("Category added. Result: " +  JSON.stringify(result));
         });
     }else{
         console.log("Failed to add product info.");
@@ -147,15 +147,35 @@ app.post('/category', function(req,res,next){
 
 
 app.post('/account',function(req,res){
-    console.log("About to add account info: " + req.body);
+    console.log("Post account " + req.body.name);
     if(accountsCollection != null){
-	    accountsCollection.insert(req.body, {w:1}, function(err, result) {
-            console.log("Added");
+        ///let itemsNum = null; Can't pass this into array????
+        accountsCollection.find({name:req.body.name}).toArray(function(err,it){
+            console.log("Item number(inside): " + it.length);
+	        if(it.length === 0){
+	            accountsCollection.insert(req.body, {w:1}, function(err, result) {
+	                console.log("Account added. Result: " +  JSON.stringify(result));
+	            });
+	        }else{
+	            accountsCollection.update( { name: req.body.name }, { $addToSet: { title: { $each: req.body.title } } },function(err,result){
+	                console.log("Account updated. Result: " +  JSON.stringify(result));
+	            } );
+	        }
         });
-    }else{
-        console.log("Failed to add account info.");
     }
+});
 
-})
+app.get('/account',function(req,res){
+    console.log("Get account");
+    if(accountsCollection != null){
+        let items = [];
+        accountsCollection.find({name:req.body.name}).toArray(function(err,it){
+            for(let i=0; i< items.length ; i++){
+                items.push(it["title"])
+            }
+            res.send(items);
+        });
+    }
+});
 
 app.listen(app.get("port"), () => {});
