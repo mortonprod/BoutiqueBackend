@@ -114,6 +114,11 @@ app.post('/product',upload.single('file'), function(req,res,next){
         if(typeof req.file === "undefined" || req.file === null){
             error.push("Need to upload a picture for product");
             isError = true;
+        }else{
+            if(!req.file.originalname.includes(".png") && !req.file.originalname.includes(".jpg")){
+	            error.push("Uploaded files does not have the extension png or jpeg");
+	            isError = true;
+            }
         }
         if(typeof req.body.name === "undefined" || req.body.name == null || req.body.name == "null" || req.body.name == ""){
             error.push("Product needs a name");
@@ -135,10 +140,6 @@ app.post('/product',upload.single('file'), function(req,res,next){
             error.push("Add the number of products");
             isError = true;
         }
-        if(!req.file.originalname.includes(".png") && !req.file.originalname.includes(".jpg")){
-            error.push("Uploaded files does not have the extension png or jpeg");
-            isError = true;
-        }
         console.log("Error: " + error);
         if(isError){
             res.send(error);
@@ -149,11 +150,11 @@ app.post('/product',upload.single('file'), function(req,res,next){
 		    productsCollection.count({'name':body.name},function(err, count) {            
 		      console.log("Count " + count);
 		      if(count > 0){
-		        res.send("This product already exists. (Change the name)");
+		        res.send(["This product already exists. (Change the name)"]);
 		      }else{
 		        productsCollection.insert(body, {w:1}, function(err, result) {
 		            console.log("Added. Result: " +  JSON.stringify(result));
-		            res.send("Product Added");
+		            res.send(["Product Added"]);
 		        });
 		      }
 		    });
@@ -181,15 +182,25 @@ app.get('/categories',function(req,res){
 
 
 app.post('/category', function(req,res,next){
-    console.log('\n uploaded name %s',  JSON.stringify(req.body));
+    console.log("Category uploaded: " +  JSON.stringify(req.body));
     if(categoriesCollection != null){
-        categoriesCollection.insert(req.body, {w:1}, function(err, result) {
-            console.log("Category added. Result: " +  JSON.stringify(result));
+        categoriesCollection.count({productCategory:req.body.productCategory},function(err,count){
+            if(count > 0){
+                res.send(["This category already exists"]);
+            }else{
+	            if(typeof req.body.productCategory === "undefined" || req.body.productCategory == null || req.body.productCategory == "null" || req.body.productCategory == ""){
+	                res.send(["Category is empty"]);
+	            }else{
+	                categoriesCollection.insert(req.body, {w:1}, function(err, result) {
+                        res.send(["Category Added"]);
+	                    console.log("Category added. Result: " +  JSON.stringify(result));
+	                });
+	            }
+            }
         });
     }else{
-        console.log("Failed to add product info.");
+        console.log("Failed to add category info.");
     }
-    res.redirect('/account');
 });
 
 
