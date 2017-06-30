@@ -135,11 +135,16 @@ app.post('/product',upload.single('file'), function(req,res,next){
             error.push("Add the number of products");
             isError = true;
         }
+        if(!req.file.originalname.includes(".png") && !req.file.originalname.includes(".jpg")){
+            error.push("Uploaded files does not have the extension png or jpeg");
+            isError = true;
+        }
         console.log("Error: " + error);
         if(isError){
             res.send(error);
         }else{
-		    let body = Object.assign(req.body,{file:req.file.originalname});
+            let pathFile = "/productsImages/"+req.file.originalname;
+		    let body = Object.assign(req.body,{file:pathFile});
 		    console.log("Product uploaded: " + JSON.stringify(body));
 		    productsCollection.count({'name':body.name},function(err, count) {            
 		      console.log("Count " + count);
@@ -219,10 +224,25 @@ app.get('/account',function(req,res){
         });
     }
 });
+//Don't want to store product images in client static folder. Redirect non static server directory and send image.
+app.get('/productsImages',function(req,res){
+    var name = request.pathname;
+    if(name.includes(".png")){
+		var img = fs.readFileSync("./productImages/" + name);
+		res.writeHead(200, {'Content-Type': 'image/png' });
+		res.end(img, 'binary');
+    }
+    if(name.includes(".jpeg")){
+        var img = fs.readFileSync("./productImages/" + name);
+        res.writeHead(200, {'Content-Type': 'image/jpeg' });
+        res.end(img, 'binary');
+    }
+});
 //GET products in chronological order customers were looking at. 
 //Query Accounts for most recent searches to oldest.
 //Return block of products  
 app.get('/others/:start/:end',function(req,res){
+
 
 });
 
