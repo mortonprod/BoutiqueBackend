@@ -107,18 +107,55 @@ app.get('/products/:category',function(req,res){
 
 
 app.post('/product',upload.single('file'), function(req,res,next){
-    console.log('\n uploaded name %s',  JSON.stringify(req.body));
-    console.log('\n uploaded file %s',  req.file.originalname);
+    console.log("Input strings: " + JSON.stringify(req.body));
     if(productsCollection != null){
-        productsCollection.insert(req.body, {w:1}, function(err, result) {
-        console.log("Added. Result: " +  JSON.stringify(result));
-        });
-    }else{
-        console.log("Failed to add product info.");
+        let error = [];
+        let isError = false;
+        if(typeof req.file === "undefined" || req.file === null){
+            error.push("Need to upload a picture for product");
+            isError = true;
+        }
+        if(typeof req.body.name === "undefined" || req.body.name == null || req.body.name == "null" || req.body.name == ""){
+            error.push("Product needs a name");
+            isError = true;
+        }
+        if(typeof req.body.description === "undefined" || req.body.description == null || req.body.description == "null" || req.body.description == ""){
+            error.push("Product needs a description");
+            isError = true;
+        }
+        if(typeof req.body.info === "undefined" || req.body.info == null || req.body.info == "null" || req.body.info == ""){
+            error.push("Need to provide info for this product");
+            isError = true;
+        }
+        if(typeof req.body.categories === "undefined" || req.body.categories == null || req.body.categories == "null" || req.body.categories == ""){
+            error.push("Need to put the product in one or more categories.");
+            isError = true;
+        }
+        if(typeof req.body.number === "undefined" || req.body.number == null || req.body.number == "null" || req.body.number == ""){
+            error.push("Add the number of products");
+            isError = true;
+        }
+        console.log("Error: " + error);
+        if(isError){
+            res.send(error);
+        }else{
+		    let body = Object.assign(req.body,{file:req.file.originalname});
+		    console.log("Product uploaded: " + JSON.stringify(body));
+		    productsCollection.count({'name':body.name},function(err, count) {            
+		      console.log("Count " + count);
+		      if(count > 0){
+		        res.send("This product already exists. (Change the name)");
+		      }else{
+		        productsCollection.insert(body, {w:1}, function(err, result) {
+		            console.log("Added. Result: " +  JSON.stringify(result));
+		            res.send("Product Added");
+		        });
+		      }
+		    });
+		    //Must rename the file to match what was passed in
+		    fs.rename(path.join(__dirname, './productsImages', req.file.filename) , path.join(__dirname, './productsImages', req.file.originalname));
+        }
     }
-    //Must rename the file to match what was passed in
-    fs.rename(path.join(__dirname, './productsImages', req.file.filename) , path.join(__dirname, './productsImages', req.file.originalname))
-    res.redirect('/account');
 });
 
 app.get('/categories',function(req,res){
@@ -181,6 +218,12 @@ app.get('/account',function(req,res){
             res.send(items);
         });
     }
+});
+//GET products in chronological order customers were looking at. 
+//Query Accounts for most recent searches to oldest.
+//Return block of products  
+app.get('/others/:start/:end',function(req,res){
+
 });
 
 app.listen(app.get("port"), () => {});
