@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const fs = require('fs');
 const MongoClient = require('mongodb').MongoClient;
+const stringToObject = require('mongodb').ObjectID
 
 ///Must be full path to save to the right location. 
 var upload = multer({ dest: path.join(__dirname, './productsImages') }); 
@@ -13,6 +14,7 @@ var app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.set("port", process.env.PORT || 3001);
+app.use("/productsImages", express.static(__dirname + "/productsImages"));//point to productImages if requested otherwise get from build location
 app.use(express.static("client/build"));
 
 var accountsCollection = null; 
@@ -143,6 +145,10 @@ app.post('/product',upload.single('file'), function(req,res,next){
         console.log("Error: " + error);
         if(isError){
             res.send(error);
+            //Remove file saved if we have an error.
+            if(typeof req.file !== "undefined" || req.file !== null){
+                fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
+            }
         }else{
             let pathFile = "/productsImages/"+req.file.originalname;
 		    let body = Object.assign(req.body,{file:pathFile});
@@ -150,19 +156,133 @@ app.post('/product',upload.single('file'), function(req,res,next){
 		    productsCollection.count({'name':body.name},function(err, count) {            
 		      console.log("Count " + count);
 		      if(count > 0){
+                if(typeof req.file !== "undefined" || req.file !== null){
+                    fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
+                }
 		        res.send(["This product already exists. (Change the name)"]);
 		      }else{
-		        productsCollection.insert(body, {w:1}, function(err, result) {
-		            console.log("Added. Result: " +  JSON.stringify(result));
-		            res.send(["Product Added"]);
-		        });
+                productsCollection.count({'file':pathFile},function(err, count) {
+                    if(count > 0){
+                        if(typeof req.file !== "undefined" || req.file !== null){
+                            fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
+                        }
+                        res.send(["The name of the picture laready exists. Rename it"]);
+                    }else{
+				        productsCollection.insert(body, {w:1}, function(err, result) {
+				            console.log("Added. Result: " +  JSON.stringify(result));
+                            //Must rename the file to match what was passed in
+                            fs.rename(path.join(__dirname, './productsImages', req.file.filename) , path.join(__dirname, './productsImages', req.file.originalname));
+				            res.send(["Product Added"]);
+				        });
+                    }
+                });
 		      }
 		    });
-		    //Must rename the file to match what was passed in
-		    fs.rename(path.join(__dirname, './productsImages', req.file.filename) , path.join(__dirname, './productsImages', req.file.originalname));
+
         }
     }
 });
+
+
+
+app.post('/update-product',upload.single('file'), function(req,res,next){
+    console.log("Input strings: " + JSON.stringify(req.body));
+    if(productsCollection != null){
+        let error = [];
+        let isError = false;
+        let isFileChange = false;
+        if(typeof req.file !== "undefined" && req.file !== null){//Only need to check extension if file passed.
+            isFileChange = true;
+            if(!req.file.originalname.includes(".png") && !req.file.originalname.includes(".jpg")){
+                isError = true;
+                error.push("Uploaded files does not have the extension png or jpeg");
+            }
+            let pathFile = "/productsImages/"+req.file.originalname
+            productsCollection.count({$and:[ 
+                    {'file':pathFile}, 
+                    {'_id':{ $ne: stringToObject(req.body.id) }}  
+                ]},
+                function(err, count) {
+	                if(count > 0){
+	                    isError = true;
+	                    error.push("The name of picture exists. Rename it.");
+	                }
+                }
+            );
+        }
+        if(typeof req.body.name === "undefined" || req.body.name == null || req.body.name == "null" || req.body.name == ""){
+            error.push("Product needs a name");
+            isError = true;
+        }
+        if(typeof req.body.description === "undefined" || req.body.description == null || req.body.description == "null" || req.body.description == ""){
+            error.push("Product needs a description");
+            isError = true;
+        }
+        if(typeof req.body.info === "undefined" || req.body.info == null || req.body.info == "null" || req.body.info == ""){
+            error.push("Need to provide info for this product");
+            isError = true;
+        }
+        if(typeof req.body.categories === "undefined" || req.body.categories == null || req.body.categories == "null" || req.body.categories == ""){
+            error.push("Need to put the product in one or more categories.");
+            isError = true;
+        }
+        if(typeof req.body.number === "undefined" || req.body.number == null || req.body.number == "null" || req.body.number == ""){
+            error.push("Add the number of products");
+            isError = true;
+        }
+        console.log("Error: " + error);
+        if(isError){
+            res.send(error);
+        }else{
+            if(isFileChange){
+	            productsCollection.findOne({_id:stringToObject(req.body.id)}, function(err, result){
+                    //Delete old file
+                    console.log("dir: " + __dirname + " file: " + result.file )  
+                    fs.unlink(path.join(__dirname ,result.file));
+                    //Save new file with the original name.
+                    fs.rename(path.join(__dirname, './productsImages', req.file.filename) , path.join(__dirname, './productsImages', req.file.originalname));
+	            });
+            }
+            productsCollection.find(
+                {
+                    _id:{ $ne: stringToObject(req.body.id) }, ////Must convert from string to mongoDb object
+                    name:req.body.name 
+                }
+            ).count(function(err, count) {            
+              console.log("Update Count: " + count);
+              if(count > 0){
+                if(isFileChange){
+                    fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
+                }
+                res.send(["This product already exists. (Change the name)"]);
+              }else{
+                if(isFileChange){//If file added then update everything.
+                    let pathFile = "/productsImages/"+req.file.originalname;
+                    let body = Object.assign(req.body,{file:pathFile});
+                    console.log("Product uploaded: " + JSON.stringify(body));
+	                productsCollection.update({_id:stringToObject(req.body.id)},body, function(err, result) {
+	                    res.send(["Product Updated (with new image)"]);
+	                });
+                }else{
+                    productsCollection.update({_id:stringToObject(req.body.id)},{$set: {
+                        name:req.body.name,
+                        description:req.body.description,
+                        info:req.body.info,
+                        number:req.body.number,
+                        categories:req.body.categories
+                        }}, 
+                        function(err, result) {
+                            console.log("Added. Result: " +  JSON.stringify(result));
+                            res.send(["Product Updated(No new image)"]);
+                        }
+                    );
+                }
+              }
+            });
+        }
+    }
+});
+
 
 app.get('/categories',function(req,res){
     console.log("Get categories");
@@ -233,20 +353,6 @@ app.get('/account',function(req,res){
             }
             res.send(items);
         });
-    }
-});
-//Don't want to store product images in client static folder. Redirect non static server directory and send image.
-app.get('/productsImages',function(req,res){
-    var name = request.pathname;
-    if(name.includes(".png")){
-		var img = fs.readFileSync("./productImages/" + name);
-		res.writeHead(200, {'Content-Type': 'image/png' });
-		res.end(img, 'binary');
-    }
-    if(name.includes(".jpeg")){
-        var img = fs.readFileSync("./productImages/" + name);
-        res.writeHead(200, {'Content-Type': 'image/jpeg' });
-        res.end(img, 'binary');
     }
 });
 //GET products in chronological order customers were looking at. 
