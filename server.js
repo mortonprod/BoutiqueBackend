@@ -325,33 +325,56 @@ app.post('/category', function(req,res,next){
 
 
 app.post('/account',function(req,res){
-    console.log("Post account " + req.body.name);
+    console.log("Post account " + JSON.stringify(req.body));
     if(accountsCollection != null){
-        ///let itemsNum = null; Can't pass this into array????
-        accountsCollection.find({name:req.body.name}).toArray(function(err,it){
-            console.log("Item number(inside): " + it.length);
-	        if(it.length === 0){
-	            accountsCollection.insert(req.body, {w:1}, function(err, result) {
-	                console.log("Account added. Result: " +  JSON.stringify(result));
-	            });
-	        }else{
-	            accountsCollection.update( { name: req.body.name }, { $addToSet: { title: { $each: req.body.title } } },function(err,result){
-	                console.log("Account updated. Result: " +  JSON.stringify(result));
-	            } );
-	        }
-        });
-    }
-});
-
-app.get('/account',function(req,res){
-    console.log("Get account");
-    if(accountsCollection != null){
-        let items = [];
-        accountsCollection.find({name:req.body.name}).toArray(function(err,it){
-            for(let i=0; i< items.length ; i++){
-                items.push(it["title"])
+        accountsCollection.find({name:req.body.name}).count(function(err,count){
+            if(count == 0 ){//If no name found then assume new and create account
+                if(typeof req.body.email !== "undefined"){
+                    let obj = {
+	                    name:req.body.name,
+	                    email:req.body.email,
+	                    bought:[],
+	                    looked:[]
+                    }
+		            accountsCollection.insert(obj,{w:1}, function(err, result) {
+			                res.send({bought:obj.bought,looked:obj.looked});
+			                console.log("Category added with email. Result: " +  JSON.stringify(result));
+	                });
+                }else{
+                    let obj = {
+                        name:req.body.name,
+                        bought:[],
+                        looked:[]
+                    }
+                    accountsCollection.insert(obj,{w:1}, function(err, result) {
+                            res.send({bought:obj.bought,looked:obj.looked});
+                            console.log("Category added without email. Result: " +  JSON.stringify(result));
+                    });
+                }
+            }else if(count == 1){//We already have an entry so just send it back.
+                accountsCollection.findOne({name:req.body.name}, function(err, result){
+                    console.log("Found account. Send");
+                    res.send({bought:result.bought,looked:result.looked});
+                });
+            }else{//If we have two entries then look for email to try to work out who they are.
+                if(typeof req.body.email !== "undefined"){
+                    accountsCollection.find({name:req.body.email}).count(function(err,count){
+                        if(count == 1){//If we find unique email then send that
+                            accountsCollection.findOne({_id:stringToObject(req.body.id)}, function(err, result){
+                                console.log("Found account with email. Send");
+                                res.send({bought:result.bought,looked:result.looked});
+                            });
+                        }
+                        else{//Multiple entries or none so send nothing
+                            console.log("Email and name repeated. Who are you???");
+                            res.send({});
+                        }
+                    });
+                }else{
+                    console.log("No way to identify you. Same name as someone else and no email address.");
+                    res.send({});
+                }
             }
-            res.send(items);
         });
     }
 });
