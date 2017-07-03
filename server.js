@@ -48,10 +48,6 @@ MongoClient.connect("mongodb://db:27017", function(err, db) {
   }
 });
 
-
-
-
-
 app.get('/', function (req, res) {
     res.sendFile(path.join(__dirname+'/client/build/index.html'));
 });
@@ -66,6 +62,10 @@ app.get('/more',function(req,res){
 
 app.get('/account',function(req,res){
  res.sendFile(path.join(__dirname+'/client/build/account.html'));
+});
+
+app.get('/admin',function(req,res){
+ res.sendFile(path.join(__dirname+'/client/build/admin.html'));
 });
 
 app.get('/products',function(req,res){
@@ -87,12 +87,22 @@ app.get('/products/:category',function(req,res){
     let data = []
     console.log("Query category: " + category);
     if(productsCollection !== null){
-        productsCollection.find({ productCategories: category }).toArray(function(err,items){
-            let obj = {
-                name:category,
-                items:category
+        productsCollection.count({ categories:{$regex : category}},function(err, count) {
+            if(count > 0 ){
+		        productsCollection.find({ categories: {$regex : category}}).toArray(function(err,items){
+		            let obj = {
+		                name:category,
+		                products:items
+		            }
+		            res.send(obj);
+		        });
+            }else{
+	            let obj = {
+	                name:category,
+	                products:[]
+	            }
+	            res.send(obj);
             }
-            res.send(obj);
         });
     }else{
         console.log("Failed to get products");
@@ -105,7 +115,7 @@ app.post('/product',upload.single('file'), function(req,res,next){
     if(productsCollection != null){
         let error = [];
         let isError = false;
-        if(typeof req.file === "undefined" || req.file === null){
+        if(!req.file){
             error.push("Need to upload a picture for product");
             isError = true;
         }else{
@@ -114,23 +124,32 @@ app.post('/product',upload.single('file'), function(req,res,next){
 	            isError = true;
             }
         }
-        if(typeof req.body.name === "undefined" || req.body.name == null || req.body.name == "null" || req.body.name == ""){
+        if(!req.body.name || req.body.name == "null" || req.body.name == ""){
             error.push("Product needs a name");
             isError = true;
         }
-        if(typeof req.body.description === "undefined" || req.body.description == null || req.body.description == "null" || req.body.description == ""){
+        if(!req.body.description || req.body.description == "null" || req.body.description == ""){
             error.push("Product needs a description");
             isError = true;
         }
-        if(typeof req.body.info === "undefined" || req.body.info == null || req.body.info == "null" || req.body.info == ""){
+        if(!req.body.info || req.body.info == "null" || req.body.info == ""){
             error.push("Need to provide info for this product");
             isError = true;
+        }else{
+            let array = req.body.info.split(" ");
+            console.log("Array: " + JSON.stringify(array));
+            array.map((el)=>{
+	            if(el.split(":").length !== 2 && !isError){
+	                error.push("Info not name:value pair in input.");
+	                isError = true;
+	            }
+            });
         }
-        if(typeof req.body.categories === "undefined" || req.body.categories == null || req.body.categories == "null" || req.body.categories == ""){
+        if(!req.body.categories || req.body.categories == "null" || req.body.categories == ""){
             error.push("Need to put the product in one or more categories.");
             isError = true;
         }
-        if(typeof req.body.number === "undefined" || req.body.number == null || req.body.number == "null" || req.body.number == ""){
+        if(!req.body.number|| req.body.number == "null" || req.body.number == ""){
             error.push("Add the number of products");
             isError = true;
         }
@@ -138,7 +157,7 @@ app.post('/product',upload.single('file'), function(req,res,next){
         if(isError){
             res.send(error);
             //Remove file saved if we have an error.
-            if(typeof req.file !== "undefined" || req.file !== null){
+            if(req.file){
                 fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
             }
         }else{
@@ -148,17 +167,17 @@ app.post('/product',upload.single('file'), function(req,res,next){
 		    productsCollection.count({'name':body.name},function(err, count) {            
 		      console.log("Count " + count);
 		      if(count > 0){
-                if(typeof req.file !== "undefined" || req.file !== null){
+                if(req.file){
                     fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
                 }
 		        res.send(["This product already exists. (Change the name)"]);
 		      }else{
                 productsCollection.count({'file':pathFile},function(err, count) {
                     if(count > 0){
-                        if(typeof req.file !== "undefined" || req.file !== null){
+                        if(req.file){
                             fs.unlink(path.join(__dirname, './productsImages', req.file.filename));
                         }
-                        res.send(["The name of the picture laready exists. Rename it"]);
+                        res.send(["The name of the picture already exists. Rename it"]);
                     }else{
 				        productsCollection.insert(body, {w:1}, function(err, result) {
 				            console.log("Added. Result: " +  JSON.stringify(result));
@@ -299,9 +318,11 @@ app.post('/category', function(req,res,next){
         categoriesCollection.count({productCategory:req.body.productCategory},function(err,count){
             if(count > 0){
                 res.send(["This category already exists"]);
+                console.log("Category already exists");
             }else{
 	            if(typeof req.body.productCategory === "undefined" || req.body.productCategory == null || req.body.productCategory == "null" || req.body.productCategory == ""){
 	                res.send(["Category is empty"]);
+                    console.log("Category is Empty");
 	            }else{
 	                categoriesCollection.insert(req.body, {w:1}, function(err, result) {
                         res.send(["Category Added"]);
