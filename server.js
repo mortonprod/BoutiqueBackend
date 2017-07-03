@@ -88,19 +88,11 @@ app.get('/products/:category',function(req,res){
     console.log("Query category: " + category);
     if(productsCollection !== null){
         productsCollection.find({ productCategories: category }).toArray(function(err,items){
-            for (let i = 0 ; i < items.length; i++){
-                console.log("Product: " + i + "  " + JSON.stringify(items[i]));
-                data.push(
-                    {
-                        title:items[i]["productName"],
-                        description:null,
-                        info:null,
-                        pic:null,
-                        price:null
-                    }
-                );
+            let obj = {
+                name:category,
+                items:category
             }
-            res.send(data);
+            res.send(obj);
         });
     }else{
         console.log("Failed to get products");
