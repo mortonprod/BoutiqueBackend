@@ -156,21 +156,7 @@ app.get('/account',function(req,res){
 });
 
 app.get('/admin/',function(req,res){
-    passwordsCollection.find({}).count (function(err, count) {
-	    passwordsCollection.find({}).toArray(function(err,items){
-	        for (let i = 0 ; i < items.length; i++){
-	            console.log("Product: " + i + "  " + JSON.stringify(items[i]));
-	            bcrypt.compare(req.password, item[i].hash, function(err, res) {
-			        if(res) {
-			            res.sendFile(path.join(__dirname+'/client/build/admin.html'));
-			        }
-                    if( i === count-1){
-			            res.sendFile(path.join(__dirname+'/client/build/home.html'));
-			        } 
-	            });
-	        }
-	    });
-    });
+    res.sendFile(path.join(__dirname+'/client/build/admin.html'));
 });
 
 let hashNum = 10;
