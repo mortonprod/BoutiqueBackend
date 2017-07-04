@@ -6,8 +6,8 @@ const fs = require('fs');
 const MongoClient = require('mongodb').MongoClient;
 const stringToObject = require('mongodb').ObjectID
 const bcrypt = require('bcrypt');
-var session = require('express-session');
-import mongoStoreFactory from "connect-mongo";
+const session = require('express-session');
+const mongoStoreFactory = require("connect-mongo");
 
 ///Must be full path to save to the right location. 
 var upload = multer({ dest: path.join(__dirname, './productsImages') }); 
@@ -50,30 +50,92 @@ MongoClient.connect("mongodb://db:27017", function(err, db) {
         }
     });
     db.collection('passwords', function(err, collection) {
-    if(!err){
-        console.log("Accessed passwords Db.");
-        passwordsCollection = collection
+	    if(!err){
+	        console.log("Accessed passwords Db.");
+	        passwordsCollection = collection
+
+	    }
+    });
+    let sess = null;
+    if (app.get('env') === 'production') {
+        const MongoStore = mongoStoreFactory(session);
+        console.log("Production session");
+        sess = {
+            store: new MongoStore({
+                db:db,
+                ttl: (1 * 60 * 60)
+            }),
+            secret: 'keyboard cat',
+            saveUninitialized: true,
+            resave: false,
+            saveUninitialized: true,
+            cookie: { secure: true, maxAge:  1800000, httpOnly: true },
+            name: "id"
+        }
+    }else{
+        console.log("Development session");
+        sess = { secret: 'keyboard cat',resave: false, saveUninitialized: true, cookie: { maxAge: 60000 }};
 
     }
+    console.log("Begin to init....");
+    app.use(session(sess));
+    //Must define inside callback so session defined before the definition of the route of interest.
+    app.post('/admin-login',function(req,res){
+	    console.log("Input for admin login strings: " + JSON.stringify(req.body) + "  Session: " + JSON.stringify(req.session));
+	    //If no password in database then allow you to set one without passing a password. Otherwise you need to provide the old one.
+	    passwordsCollection.find({}).count (function(err, count) {
+	        if(count === 0 ){
+	            console.log("No password has been create yet.");
+	            res.send(["No password create yet."]);
+	        }else if(count === 1){
+	            passwordsCollection.find({}).toArray(function(err,items){
+	                console.log("Old password hash and id: " + JSON.stringify(items[0].hash) + "   " + items[0]._id);
+	                bcrypt.compare(req.body.password, items[0].hash, function(err, passed) {
+	                    if(passed) {
+	                        req.session.login("Admin", function(err) {
+	                            if (err) {
+	                                return res.status(500).send("There was an error updating password. Please try again later.");
+	                            }else{
+	                                console.log("Password correct. Logged In");
+	                                res.send(["Password correct. Logged In"]);
+	                            }
+	                        });
+	                    }else{
+	                        console.log("Password wrong");
+	                        res.send(["Password wrong"]);
+	                    } 
+	                });
+	            });
+	        }else{
+	            console.log("Multiple passwords in database. Contact Alexander Morton");
+	            res.send(["Multiple passwords in database. Contact Alexander Morton"]);
+	        }
+	    })
     });
-    const MongoStore = mongoStoreFactory(session);
-    app.use(session({
-	    store: new MongoStore({
-	        dbPromise: connectionProvider("mongodb://db:27017", db)
-	    }),
-	    secret: "password",
-	    saveUninitialized: true,
-	    resave: false,
-	    cookie: {
-	        path: "/",
+    app.get('/hash',function(req,res){
+	    console.log("User info: " + req.session.cookie.userInfo === "Admin");
+	    if(req.session.cookie.userInfo === "Admin"){
+	        console.log("Cookie found send hashes ");
+	        passwordsCollection.find({}).toArray(function(err,items){
+	            res.send([items]);
+	        });
+	    }else{
+	        console.log("Cookie not found don't send hashes. Need to login");
+	        res.send(["Need to login"]);
 	    }
-    }));
+    });
   }
 });
 
 
+
 session.Session.prototype.login = function(user, cb){
-    this.userInfo = user;
+    this.req.session.regenerate(function(err){
+		if (err){
+		    cb(err);
+            this.userInfo = user;//Set session username after regenerating a new session.
+		}
+    });
     cb();
 };
 
@@ -93,38 +155,81 @@ app.get('/account',function(req,res){
  res.sendFile(path.join(__dirname+'/client/build/account.html'));
 });
 
-app.get('/admin/:hash',function(req,res){
+app.get('/admin/',function(req,res){
     passwordsCollection.find({}).count (function(err, count) {
 	    passwordsCollection.find({}).toArray(function(err,items){
-            if(req.params.hash==="hash"){
-                res.send([items])
-            }else{
-		        for (let i = 0 ; i < items.length; i++){
-		            console.log("Product: " + i + "  " + JSON.stringify(items[i]));
-		            bcrypt.compare(req.password, item[i].hash, function(err, res) {
-				        if(res) {
-				            res.sendFile(path.join(__dirname+'/client/build/admin.html'));
-				        }
-	                    if( i === count-1){
-				            res.sendFile(path.join(__dirname+'/client/build/home.html'));
-				        } 
-		            });
-		        }
-            }
+	        for (let i = 0 ; i < items.length; i++){
+	            console.log("Product: " + i + "  " + JSON.stringify(items[i]));
+	            bcrypt.compare(req.password, item[i].hash, function(err, res) {
+			        if(res) {
+			            res.sendFile(path.join(__dirname+'/client/build/admin.html'));
+			        }
+                    if( i === count-1){
+			            res.sendFile(path.join(__dirname+'/client/build/home.html'));
+			        } 
+	            });
+	        }
 	    });
     });
 });
+
 let hashNum = 10;
-app.post('/admin',function(req,res){
-    console.log("Password: " +  req.body.password);
-	bcrypt.hash(req.body.password, hashNum, function(err, hash) {
-	   passwordsCollection.insert({hash:hash}, {w:1}, function(err, result) {
-	        console.log("Added Password: " +  JSON.stringify(result) + "  Error: " + err);
-	        res.send(["Password Added"]);
-	    });
-	});
+app.post('/admin-update',function(req,res){
+    //If no password in database then allow you to set one without passing a password. Otherwise you need to provide the old one.
+    passwordsCollection.find({}).count (function(err, count) {
+        if(count === 0 ){
+            if(req.body.password){
+	            bcrypt.hash(req.body.password, hashNum, function(err, hash) {
+		            passwordsCollection.insert({hash:hash}, {w:1}, function(err, result) {
+			            console.log("Added Password without new one: " +  JSON.stringify(result) + "  Error: " + err + " hash: " + hash);
+			            res.send(["Password Added without new one"]);
+	                });
+	            });
+            }else{
+		        console.log("Password not provided");
+		        res.send(["Password not provided"]);
+            }   
+        }else if(count === 1){
+            if(req.body.password && req.body.passwordUpdate){
+	            passwordsCollection.find({}).toArray(function(err,items){
+	                console.log("Old password hash and id: " + JSON.stringify(items[0].hash) + "   " + items[0]._id);
+	                bcrypt.compare(req.body.password, items[0].hash, function(err, passed) {
+	                    if(passed) {
+	                        bcrypt.hash(req.body.passwordUpdate, hashNum, function(err, hash) {
+			                    passwordsCollection.update({_id:stringToObject(items[0]._id) },{hash:hash}, function(err, result) {
+	                                console.log("Update password using old one");
+			                        res.send(["Updated password using old one"]);
+			                    });
+	                        });
+	                    }else{
+	                        console.log("Old password wrong");
+	                        res.send(["Old password wrong"]);
+	                    } 
+	                });
+	            });
+            }else{
+	            console.log("Old/New password not provided");
+	            res.send(["Old/New password not provided"]);
+            }
+        }else{
+            console.log("Multiple passwords in database. Contact Alexander Morton");
+            res.send(["Multiple passwords in database. Contact Alexander Morton"]);
+        }
+    })
 });
 
+app.get('/admin-update',function(req,res){
+    console.log("Get page to update or add password");
+    res.sendFile(path.join(__dirname+'/client/build/adminUpdate.html'));
+});
+
+
+
+
+app.get('/admin-login',function(req,res){
+    console.log("Get page to sign in to admin");
+    res.sendFile(path.join(__dirname+'/client/build/adminLogin.html'));
+});
 
 
 app.get('/products',function(req,res){
