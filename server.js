@@ -5,6 +5,9 @@ const multer = require('multer');
 const fs = require('fs');
 const MongoClient = require('mongodb').MongoClient;
 const stringToObject = require('mongodb').ObjectID
+const bcrypt = require('bcrypt');
+var session = require('express-session');
+import mongoStoreFactory from "connect-mongo";
 
 ///Must be full path to save to the right location. 
 var upload = multer({ dest: path.join(__dirname, './productsImages') }); 
@@ -19,7 +22,8 @@ app.use(express.static("client/build"));
 
 var accountsCollection = null; 
 var productsCollection = null; 
-var categoriesCollection = null; 
+var categoriesCollection = null;
+var passwordsCollection = null; 
 //Hostname(db) comes from service name provide in docker.compose.
 MongoClient.connect("mongodb://db:27017", function(err, db) {
   if(!err) {
@@ -45,8 +49,33 @@ MongoClient.connect("mongodb://db:27017", function(err, db) {
 
         }
     });
+    db.collection('passwords', function(err, collection) {
+    if(!err){
+        console.log("Accessed passwords Db.");
+        passwordsCollection = collection
+
+    }
+    });
+    const MongoStore = mongoStoreFactory(session);
+    app.use(session({
+	    store: new MongoStore({
+	        dbPromise: connectionProvider("mongodb://db:27017", db)
+	    }),
+	    secret: "password",
+	    saveUninitialized: true,
+	    resave: false,
+	    cookie: {
+	        path: "/",
+	    }
+    }));
   }
 });
+
+
+session.Session.prototype.login = function(user, cb){
+    this.userInfo = user;
+    cb();
+};
 
 app.get('/', function (req, res) {
     res.sendFile(path.join(__dirname+'/client/build/index.html'));
@@ -64,9 +93,39 @@ app.get('/account',function(req,res){
  res.sendFile(path.join(__dirname+'/client/build/account.html'));
 });
 
-app.get('/admin',function(req,res){
- res.sendFile(path.join(__dirname+'/client/build/admin.html'));
+app.get('/admin/:hash',function(req,res){
+    passwordsCollection.find({}).count (function(err, count) {
+	    passwordsCollection.find({}).toArray(function(err,items){
+            if(req.params.hash==="hash"){
+                res.send([items])
+            }else{
+		        for (let i = 0 ; i < items.length; i++){
+		            console.log("Product: " + i + "  " + JSON.stringify(items[i]));
+		            bcrypt.compare(req.password, item[i].hash, function(err, res) {
+				        if(res) {
+				            res.sendFile(path.join(__dirname+'/client/build/admin.html'));
+				        }
+	                    if( i === count-1){
+				            res.sendFile(path.join(__dirname+'/client/build/home.html'));
+				        } 
+		            });
+		        }
+            }
+	    });
+    });
 });
+let hashNum = 10;
+app.post('/admin',function(req,res){
+    console.log("Password: " +  req.body.password);
+	bcrypt.hash(req.body.password, hashNum, function(err, hash) {
+	   passwordsCollection.insert({hash:hash}, {w:1}, function(err, result) {
+	        console.log("Added Password: " +  JSON.stringify(result) + "  Error: " + err);
+	        res.send(["Password Added"]);
+	    });
+	});
+});
+
+
 
 app.get('/products',function(req,res){
     if(productsCollection != null){
@@ -390,13 +449,6 @@ app.post('/account',function(req,res){
             }
         });
     }
-});
-//GET products in chronological order customers were looking at. 
-//Query Accounts for most recent searches to oldest.
-//Return block of products  
-app.get('/others/:start/:end',function(req,res){
-
-
 });
 
 app.listen(app.get("port"), () => {});
