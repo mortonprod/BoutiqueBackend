@@ -289,7 +289,7 @@ app.post('/product',upload.single('file'), function(req,res,next){
             let array = req.body.info.split(" ");
             console.log("Array: " + JSON.stringify(array));
             array.map((el)=>{
-	            if(el.split(":").length !== 2 && !isError){
+	            if((el.split(":").length !== 2 || el.split(":")[0] === "" || el.split(":")[1] === "") && !isError){
 	                error.push("Info not name:value pair in input.");
 	                isError = true;
 	            }
@@ -344,7 +344,15 @@ app.post('/product',upload.single('file'), function(req,res,next){
     }
 });
 
-
+app.post('/product-delete',upload.single('file'), function(req,res,next){
+    console.log("product delete: " + JSON.stringify(req.body));
+    if(productsCollection != null){
+        productsCollection.remove({_id:stringToObject(req.body.id)});
+        res.send(["The product has been removed"]);
+    }else{
+        res.send(["Products db not attached"]);
+    }
+});
 
 app.post('/update-product',upload.single('file'), function(req,res,next){
     console.log("Input strings: " + JSON.stringify(req.body));
@@ -460,6 +468,39 @@ app.get('/categories',function(req,res){
         console.log("Failed to get products");
     }
 });
+
+app.post('/category-delete', function(req,res,next){
+    console.log("Category deleted: " +  JSON.stringify(req.body));
+    if(req.body.productCategory && req.body.productCategory != "null" && req.body.productCategory != ""){
+	    if(productsCollection){
+	        productsCollection.count({ categories:{$regex : req.body.productCategory}},function(err, count) {
+	            if(count > 0){
+	                res.send(["Category attached to product. Remove or change product before deleting"]);
+	            }else{
+	                if(categoriesCollection){
+                        categoriesCollection.count({productCategory:req.body.productCategory},function(err, count) {
+                            if(count >0){
+	                            categoriesCollection.remove({productCategory:req.body.productCategory});
+                                res.send(["Category removed"]);
+                            }else{
+                                res.send(["Category does not exist"]);
+                            }
+                        });
+	                }else{
+	                    res.send(["Category db not attached"]);
+	                }
+	            }
+	        });
+	    }else{
+            res.send(["Products db not attached"]);
+        }
+    }else{
+        res.send(["Need to write what category you want to remove"]);
+    }
+
+
+})
+
 
 
 app.post('/category', function(req,res,next){
