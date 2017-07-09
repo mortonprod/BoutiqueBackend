@@ -17,6 +17,7 @@ var app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.set("port", process.env.PORT || 3001);
+console.log("Port: " + process.env.PORT + " mode:  " + process.env.NODE_ENV);
 app.use("/productsImages", express.static(__dirname + "/productsImages"));//point to productImages if requested otherwise get from build location
 app.use(express.static("client/build"));
 
