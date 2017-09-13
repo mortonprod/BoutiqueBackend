@@ -8,10 +8,11 @@ services:
       - ./server.js:/usr/src/app/server.js
       - ./client/build:/usr/src/app/client/build
       - ./productsImages:/usr/src/app/productsImages
+      - ./keys:/usr/src/app/keys
     depends_on:
       - db
-    #ports:
-     # - "3000:3000"
+    ports:
+      - "3000:3000"
   db: 
     image: mongo:latest
     restart: unless-stopped

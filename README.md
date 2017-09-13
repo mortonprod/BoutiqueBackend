@@ -1,16 +1,16 @@
 # Boutique Backend
 
+This is the backend for a boutique store based in Helensburgh. The front is the boutique repository.
 
-##Docker
+# Build 
 
-docker build -t mortonprod/boutique:latest  .
+The backend is compose of two services; the node server and the mongo database. 
+This will be on a single network which will be deployed through a nginx proxy server. 
+See nginx-certbot for deployment details.
 
-Then to run the container
+```
+npm run build
+```
 
-docker run -p 4000:3001 -m "300M" --memory-swap "1G" --name boutique -d  --init mortonprod/boutique
 
-Connect to docker hub and then push:
-
-docker login
-docker push
 

@@ -8,10 +8,9 @@ const stringToObject = require('mongodb').ObjectID
 const bcrypt = require('bcrypt');
 const session = require('express-session');
 const mongoStoreFactory = require("connect-mongo");
-
-///Must be full path to save to the right location. 
+require("./keys/keys.js");
+/**Must be full path to save to the right location. */
 var upload = multer({ dest: path.join(__dirname, './productsImages') }); 
-//var upload = multer({ dest: 'productsImages/' }); 
 
 var app = express();
 app.use(bodyParser.json());
@@ -21,12 +20,13 @@ console.log("Port: " + process.env.PORT + " mode:  " + process.env.NODE_ENV);
 app.use("/productsImages", express.static(__dirname + "/productsImages"));//point to productImages if requested otherwise get from build location
 app.use(express.static("client/build"));
 
-var accountsCollection = null; 
-var productsCollection = null; 
-var categoriesCollection = null;
-var passwordsCollection = null; 
+
 //Hostname(db) comes from service name provide in docker.compose.
 MongoClient.connect("mongodb://db:27017", function(err, db) {
+  var accountsCollection = null; 
+  var productsCollection = null; 
+  var categoriesCollection = null;
+  var passwordsCollection = null; 
   if(!err) {
     console.log("We are connected");
     db.collection('accounts', function(err, collection) {
@@ -66,7 +66,7 @@ MongoClient.connect("mongodb://db:27017", function(err, db) {
                 db:db,
                 ttl: (1 * 60 * 60)
             }),
-            secret: 'keyboard cat',
+            secret: process.env.SESSION_SECRET,
             saveUninitialized: true,
             resave: false,
             saveUninitialized: true,
@@ -76,7 +76,7 @@ MongoClient.connect("mongodb://db:27017", function(err, db) {
     }else{
         console.log("Development session");
         var store = new session.MemoryStore;
-        sess = {store: store, secret: 'keyboard cat',resave: true, saveUninitialized: true, cookie: { maxAge: 60000,httpOnly: false }};
+        sess = {store: store, secret: process.env.SESSION_SECRET,resave: true, saveUninitialized: true, cookie: { maxAge: 60000,httpOnly: false }};
 
     }
     console.log("Begin to init....");
